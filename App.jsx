@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
+const supabase = createClient(
+  "https://zwzevqkrxszfbdetxjcw.supabase.co",
+  "sb_publishable_OiueoTMEhWaBs0b8tQGgvQ_sJNlUT_K"
+);
 function makeId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
