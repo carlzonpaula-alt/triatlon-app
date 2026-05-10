@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   "https://zwzevqkrxszfbdetxjcw.supabase.co",
-  "sb_publishable_OiueoTMEhWaBs0b8tQGgvQ_sJNlUT_K"
+ sb_publishable_OiueoTMEhWaBs0b8tQGgvQ_sJNlUT_K
 );
 function makeId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
