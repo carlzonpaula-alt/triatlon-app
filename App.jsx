@@ -327,10 +327,32 @@ export default function TrainingCountdownApp() {
     e.preventDefault();
     if (!form.date || !form.athlete || !form.sport) return;
     const totalBrickDistance = Number(form.swimDistance || 0) + Number(form.bikeDistance || 0) + Number(form.runDistance || 0);
-    const workout = { id: editingId || makeId(), ...form, distance: form.sport === "Brickpass" ? String(totalBrickDistance) : form.distance };
-    if (editingId) setWorkouts(workouts.map((w) => (w.id === editingId ? workout : w)));
-    else setWorkouts([workout, ...workouts]);
-    resetForm(form.athlete);
+    const workout =function saveWorkout(e) {
+  e.preventDefault();
+  if (!form.date || !form.athlete || !form.sport) return;
+
+  const totalBrickDistance =
+    Number(form.swimDistance || 0) +
+    Number(form.bikeDistance || 0) +
+    Number(form.runDistance || 0);
+
+  const workout = {
+    id: editingId || makeId(),
+    ...form,
+    distance:
+      form.sport === "Brickpass"
+        ? String(totalBrickDistance)
+        : form.distance
+  };
+
+  saveWorkoutToSupabase(workout);
+
+  if (editingId)
+    setWorkouts(workouts.map((w) => (w.id === editingId ? workout : w)));
+  else
+    setWorkouts([workout, ...workouts]);
+
+  resetForm(form.athlete);
   }
 
   function scrollToForm() {
