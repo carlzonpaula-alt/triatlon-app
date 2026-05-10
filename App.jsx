@@ -157,6 +157,29 @@ function runTests() {
 runTests();
 
 const STORAGE_KEY = "triathlon-couple-countdown-v3";
+async function loadWorkoutsFromSupabase() {
+  const { data, error } = await supabase
+    .from("workouts")
+    .select("*")
+    .order("date", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    return [];
+  }
+
+  return data || [];
+}
+
+async function saveWorkoutToSupabase(workout) {
+  const { error } = await supabase
+    .from("workouts")
+    .insert([workout]);
+
+  if (error) {
+    console.error(error);
+  }
+}
 const oldStorageKeys = ["triathlon-couple-countdown-v2", "triathlon-couple-countdown-v1", "training-countdown-app-v1"];
 const defaultAthletes = ["Paula", "Kuba"];
 const athleteStyles = {
