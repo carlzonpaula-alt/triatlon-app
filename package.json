@@ -9,6 +9,7 @@
     "vite": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "@supabase/supabase-js": "latest"
     "tailwindcss": "latest",
     "@tailwindcss/vite": "latest"
   },
