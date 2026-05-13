@@ -1,12 +1,22 @@
+import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   "https://zwzevqkrxszfbdetxjcw.supabase.co",
- "sb_publishable_OiueoTMEhWaBs0b8tQGgvQ_sJNlUT_K"
+  "sb_publishable_OiueoTMEhWaBs0b8tQGgvQ_sJNlUT_K"
 );
+
+const ATHLETES = ["Paula", "Kuba"];
+const SPORTS = ["Simning", "Cykel", "Löpning", "Brickpass", "Styrka", "Rörlighet"];
+const LOCAL_SETTINGS_KEY = "paula-kuba-triatlon-settings-v1";
+
 function makeId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 function todayDateString() {
@@ -21,21 +31,14 @@ function toDate(dateString) {
   return new Date(`${dateString}T00:00:00`);
 }
 
-export function daysBetween(targetDate, now = new Date()) {
-  if (!targetDate) return null;
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const target = toDate(targetDate);
-  if (Number.isNaN(target.getTime())) return null;
-  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+function dateString(date) {
+  return date.toISOString().slice(0, 10);
 }
 
-export function sortWorkoutsNewestFirst(workouts) {
-  return [...workouts].sort((a, b) => b.date.localeCompare(a.date));
-}
-
-function isDone(workout) {
-  return workout.status === "Genomfört";
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
 }
 
 function weekStart(date = new Date()) {
@@ -46,17 +49,16 @@ function weekStart(date = new Date()) {
   return d;
 }
 
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+function daysBetween(targetDate, now = new Date()) {
+  if (!targetDate) return null;
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const target = toDate(targetDate);
+  if (Number.isNaN(target.getTime())) return null;
+  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
 }
 
-function dateString(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-export function getWeekDays(startDateString) {
+function getWeekDays(startDateString) {
   const start = weekStart(toDate(startDateString));
   return Array.from({ length: 7 }, (_, index) => {
     const date = addDays(start, index);
@@ -68,15 +70,23 @@ export function getWeekDays(startDateString) {
   });
 }
 
-function intensityScore(intensity) {
-  if (intensity === "Återhämtning") return 1;
-  if (intensity === "Lugn") return 2;
-  if (intensity === "Medel") return 3;
-  if (intensity === "Hård") return 4;
-  if (intensity === "Intervall") return 5;
-  return 2;
+function getCalendarDays(monthValue) {
+  const [year, month] = monthValue.split("-").map(Number);
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+  const mondayBasedStart = (firstDay.getDay() + 6) % 7;
+  const days = [];
+
+  for (let i = 0; i < mondayBasedStart; i++) days.push({ date: null, dayNumber: "" });
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    days.push({ date, dayNumber: day });
+  }
+  while (days.length % 7 !== 0) days.push({ date: null, dayNumber: "" });
+  return days;
 }
 
+function isDone(workout) {
 function trainingLoad(workout) {
   if (!isDone(workout)) return 0;
   return intensityScore(workout.intensity) * 10;
@@ -157,29 +167,6 @@ function runTests() {
 runTests();
 
 const STORAGE_KEY = "triathlon-couple-countdown-v3";
-async function loadWorkoutsFromSupabase() {
-  const { data, error } = await supabase
-    .from("workouts")
-    .select("*")
-    .order("date", { ascending: false });
-
-  if (error) {
-    console.error(error);
-    return [];
-  }
-
-  return data || [];
-}
-
-async function saveWorkoutToSupabase(workout) {
-  const { error } = await supabase
-    .from("workouts")
-    .insert([workout]);
-
-  if (error) {
-    console.error(error);
-  }
-}
 const oldStorageKeys = ["triathlon-couple-countdown-v2", "triathlon-couple-countdown-v1", "training-countdown-app-v1"];
 const defaultAthletes = ["Paula", "Kuba"];
 const athleteStyles = {
@@ -197,17 +184,38 @@ const defaultWorkouts = [
 ];
 
 function loadSavedState() {
-  try {
-    const current = localStorage.getItem(STORAGE_KEY);
-    if (current) return JSON.parse(current);
-    for (const key of oldStorageKeys) {
-      const saved = localStorage.getItem(key);
-      if (saved) return JSON.parse(saved);
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return null;
+}
+
+function normalizeWorkoutFromDb(workout) {
+  return {
+    ...workout,
+    distanceUnit: workout.distance_unit || workout.distanceUnit || (workout.sport === "Simning" ? "m" : "km"),
+    brickType: workout.brick_type || workout.brickType || "Cykla + springa",
+    swimDistance: workout.swim_distance || workout.swimDistance || "",
+    bikeDistance: workout.bike_distance || workout.bikeDistance || "",
+    runDistance: workout.run_distance || workout.runDistance || "",
+  };
+}
+
+function workoutToDb(workout) {
+  return {
+    id: workout.id,
+    athlete: workout.athlete || "",
+    date: workout.date || "",
+    sport: workout.sport || "",
+    status: workout.status || "Genomfört",
+    distance: workout.distance || "",
+    distance_unit: workout.distanceUnit || workout.distance_unit || "km",
+    duration: workout.duration || "",
+    intensity: workout.intensity || "Lugn",
+    feeling: workout.feeling || "",
+    notes: workout.notes || "",
+    brick_type: workout.brickType || workout.brick_type || "",
+    swim_distance: workout.swimDistance || workout.swim_distance || "",
+    bike_distance: workout.bikeDistance || workout.bike_distance || "",
+    run_distance: workout.runDistance || workout.run_distance || "",
+  };
 }
 
 function numberText(value) {
@@ -247,7 +255,8 @@ export default function TrainingCountdownApp() {
   const [goalName, setGoalName] = useState(savedState?.goalName || "Triatlon tillsammans");
   const [goalDate, setGoalDate] = useState(savedState?.goalDate || "2026-07-01");
   const [athletes, setAthletes] = useState(savedState?.athletes || defaultAthletes);
-  const [workouts, setWorkouts] = useState(savedState?.workouts || defaultWorkouts);
+  const [workouts, setWorkouts] = useState([]);
+  const [syncStatus, setSyncStatus] = useState("Laddar synk...");
   const [selectedMonth, setSelectedMonth] = useState(monthString());
   const [selectedWeekStart, setSelectedWeekStart] = useState(dateString(weekStart(new Date())));
   const [viewMode, setViewMode] = useState("Månad");
@@ -258,12 +267,69 @@ export default function TrainingCountdownApp() {
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ goalName, goalDate, athletes, workouts }));
-    } catch {
-      // Appen fungerar ändå, men sparning kan vara avstängd i vissa miljöer.
+    loadWorkoutsFromSupabase();
+
+    const channel = supabase
+      .channel("workouts-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "workouts" },
+        () => loadWorkoutsFromSupabase()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  async function loadWorkoutsFromSupabase() {
+    setSyncStatus("Synkar...");
+    const { data, error } = await supabase
+      .from("workouts")
+      .select("*")
+      .order("date", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      setSyncStatus("Synkfel");
+      return;
     }
-  }, [goalName, goalDate, athletes, workouts]);
+
+    setWorkouts((data || []).map(normalizeWorkoutFromDb));
+    setSyncStatus("Synkad");
+  }
+
+  async function upsertWorkoutToSupabase(workout) {
+    const { error } = await supabase
+      .from("workouts")
+      .upsert([workoutToDb(workout)]);
+
+    if (error) {
+      console.error(error);
+      alert("Kunde inte spara till Supabase. Kontrollera tabellen workouts.");
+      return false;
+    }
+
+    await loadWorkoutsFromSupabase();
+    return true;
+  }
+
+  async function deleteWorkoutFromSupabase(id) {
+    const { error } = await supabase
+      .from("workouts")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error(error);
+      alert("Kunde inte radera från Supabase.");
+      return false;
+    }
+
+    await loadWorkoutsFromSupabase();
+    return true;
+  }
 
   const daysLeft = daysBetween(goalDate);
   const raceWeeksLeft = daysLeft === null ? null : Math.ceil(daysLeft / 7);
@@ -323,36 +389,23 @@ export default function TrainingCountdownApp() {
     setForm({ athlete: keepAthlete, date: todayDateString(), sport: "Löpning", status: "Genomfört", brickType: "Cykla + springa", swimDistance: "", bikeDistance: "", runDistance: "", distance: "", distanceUnit: "km", duration: "", intensity: "Lugn", feeling: "", notes: "" });
   }
 
-  function saveWorkout(e) {
+  async function saveWorkout(e) {
     e.preventDefault();
     if (!form.date || !form.athlete || !form.sport) return;
-    const totalBrickDistance = Number(form.swimDistance || 0) + Number(form.bikeDistance || 0) + Number(form.runDistance || 0);
-    const workout =function saveWorkout(e) {
-  e.preventDefault();
-  if (!form.date || !form.athlete || !form.sport) return;
 
-  const totalBrickDistance =
-    Number(form.swimDistance || 0) +
-    Number(form.bikeDistance || 0) +
-    Number(form.runDistance || 0);
+    const totalBrickDistance =
+      Number(form.swimDistance || 0) +
+      Number(form.bikeDistance || 0) +
+      Number(form.runDistance || 0);
 
-  const workout = {
-    id: editingId || makeId(),
-    ...form,
-    distance:
-      form.sport === "Brickpass"
-        ? String(totalBrickDistance)
-        : form.distance
-  };
+    const workout = {
+      id: editingId || makeId(),
+      ...form,
+      distance: form.sport === "Brickpass" ? String(totalBrickDistance) : form.distance,
+    };
 
-  saveWorkoutToSupabase(workout);
-
-  if (editingId)
-    setWorkouts(workouts.map((w) => (w.id === editingId ? workout : w)));
-  else
-    setWorkouts([workout, ...workouts]);
-
-  resetForm(form.athlete);
+    const ok = await upsertWorkoutToSupabase(workout);
+    if (ok) resetForm(form.athlete);
   }
 
   function scrollToForm() {
@@ -369,21 +422,33 @@ export default function TrainingCountdownApp() {
     });
   }
 
-  function toggleStatus(id) {
-    setWorkouts(workouts.map((w) => (w.id === id ? { ...w, status: w.status === "Genomfört" ? "Planerat" : "Genomfört" } : w)));
+  async function toggleStatus(id) {
+    const workout = workouts.find((w) => w.id === id);
+    if (!workout) return;
+    await upsertWorkoutToSupabase({
+      ...workout,
+      status: workout.status === "Genomfört" ? "Planerat" : "Genomfört",
+    });
   }
 
-  function duplicateWorkout(workout) {
+  async function duplicateWorkout(workout) {
     const nextWeek = dateString(addDays(toDate(workout.date), 7));
-    setWorkouts([{ ...workout, id: makeId(), date: nextWeek, status: "Planerat" }, ...workouts]);
+    await upsertWorkoutToSupabase({ ...workout, id: makeId(), date: nextWeek, status: "Planerat" });
   }
 
-  function removeWorkout(id) {
-    setWorkouts(workouts.filter((w) => w.id !== id));
+  async function removeWorkout(id) {
+    await deleteWorkoutFromSupabase(id);
   }
 
-  function clearAll() {
-    setWorkouts([]);
+  async function clearAll() {
+    if (!confirm("Vill du rensa alla pass från Supabase?")) return;
+    const { error } = await supabase.from("workouts").delete().neq("id", "");
+    if (error) {
+      console.error(error);
+      alert("Kunde inte rensa loggen.");
+      return;
+    }
+    await loadWorkoutsFromSupabase();
   }
 
   function exportData() {
@@ -410,14 +475,10 @@ export default function TrainingCountdownApp() {
     setSelectedWeekStart(dateString(addDays(toDate(selectedWeekStart), days)));
   }
 
-  function moveWorkoutToDate(workoutId, newDate) {
-    setWorkouts((current) =>
-      current.map((workout) =>
-        workout.id === workoutId
-          ? { ...workout, date: newDate }
-          : workout
-      )
-    );
+  async function moveWorkoutToDate(workoutId, newDate) {
+    const workout = workouts.find((w) => w.id === workoutId);
+    if (!workout || !newDate) return;
+    await upsertWorkoutToSupabase({ ...workout, date: newDate });
   }
 
   function handleDrop(event, date) {
@@ -444,6 +505,7 @@ export default function TrainingCountdownApp() {
                 <span className="rounded-full border border-violet-300 bg-violet-100 px-3 py-1 text-violet-900">Paula</span>
                 <span className="rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-emerald-900">Kuba</span>
                 <span className="rounded-full border border-dashed border-slate-400 px-3 py-1 text-slate-600">Streckad = planerat</span>
+                <span className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-emerald-900">{syncStatus}</span>
               </div>
             </div>
 
@@ -661,39 +723,4 @@ export default function TrainingCountdownApp() {
                       <button onClick={() => removeWorkout(workout.id)} className="rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold hover:bg-white" aria-label="Ta bort pass" type="button">🗑️</button>
                     </div>
                   </div>
-                  <div className="mt-3 grid gap-2 text-sm md:grid-cols-2"><div className="rounded-xl bg-white/70 p-3"><span>Intensitet: </span><span className="font-medium">{workout.intensity || "—"}</span></div><div className="rounded-xl bg-white/70 p-3"><span>Känsla: </span><span className="font-medium">{workout.feeling || "—"}</span></div></div>
-                  {workout.notes && <p className="mt-3 rounded-xl bg-white/70 p-3 text-sm">{workout.notes}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-              <nav className="fixed inset-x-3 bottom-3 z-50 rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden">
-          <div className="grid grid-cols-4 gap-2 text-center text-xs font-semibold">
-            <a href="#overview" className="rounded-2xl bg-slate-100 px-2 py-3">Översikt</a>
-            <a href="#calendar" className="rounded-2xl bg-slate-100 px-2 py-3">Kalender</a>
-            <a href="#workout-form" className="rounded-2xl bg-slate-900 px-2 py-3 text-white">+ Pass</a>
-            <a href="#log" className="rounded-2xl bg-slate-100 px-2 py-3">Logg</a>
-          </div>
-        </nav>
-      </div>
-    </div>
-  );
-}
-
-function WorkoutPill({ workout, selectedWorkoutId, editWorkout }) {
-  return (
-    <button
-      draggable={workout.status === 'Planerat'}
-      onDragStart={(event) => {
-        event.dataTransfer.setData('workoutId', workout.id);
-      }}
-      onClick={() => editWorkout(workout)}
-      className={`block w-full cursor-grab rounded-xl border px-2 py-1 text-left text-[11px] leading-tight transition hover:scale-[1.02] hover:shadow-sm active:cursor-grabbing ${athleteClass(workout.athlete)} ${workout.status === 'Planerat' ? 'border-dashed opacity-70' : ''} ${selectedWorkoutId === workout.id ? 'ring-2 ring-slate-900' : ''}`}
-      type="button"
-    >
-      <span className="font-bold">{sportIcon(workout.sport)} {workout.athlete}</span><br />
-      <span>{workout.sport}{workout.status === 'Planerat' ? ' · plan' : ''}</span>
-    </button>
-  );
-}
+                  <div className="mt-3 grid gap-
