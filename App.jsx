@@ -19,20 +19,26 @@ function makeId() {
   });
 }
 
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function monthString(date = new Date()) {
-  return date.toISOString().slice(0, 7);
-}
-
-function toDate(dateString) {
-  return new Date(`${dateString}T00:00:00`);
+function pad2(value) {
+  return String(value).padStart(2, "0");
 }
 
 function dateString(date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function todayDateString() {
+  return dateString(new Date());
+}
+
+function monthString(date = new Date()) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+}
+
+function toDate(dateStringValue) {
+  if (!dateStringValue) return new Date();
+  const [year, month, day] = dateStringValue.split("-").map(Number);
+  return new Date(year, month - 1, day || 1);
 }
 
 function addDays(date, days) {
@@ -87,9 +93,25 @@ function getCalendarDays(monthValue) {
 }
 
 function isDone(workout) {
+  return workout.status === "Genomfört";
+}
+
+function intensityScore(intensity) {
+  if (intensity === "Återhämtning") return 1;
+  if (intensity === "Lugn") return 2;
+  if (intensity === "Medel") return 3;
+  if (intensity === "Hård") return 4;
+  if (intensity === "Intervall") return 5;
+  return 2;
+}
+
 function trainingLoad(workout) {
   if (!isDone(workout)) return 0;
   return intensityScore(workout.intensity) * 10;
+}
+
+function sortWorkoutsNewestFirst(workouts) {
+  return [...workouts].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
 export function totalsByAthlete(workouts, athletes) {
@@ -718,9 +740,4 @@ export default function TrainingCountdownApp() {
                     </div>
                     <div className="flex flex-col gap-2">
                       <button onClick={() => editWorkout(workout)} className="rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold hover:bg-white" type="button">Ändra</button>
-                      <button onClick={() => toggleStatus(workout.id)} className="rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold hover:bg-white" type="button">{workout.status === "Planerat" ? "Klart" : "Plan"}</button>
-                      <button onClick={() => duplicateWorkout(workout)} className="rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold hover:bg-white" type="button">Kopiera +1v</button>
-                      <button onClick={() => removeWorkout(workout.id)} className="rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold hover:bg-white" aria-label="Ta bort pass" type="button">🗑️</button>
-                    </div>
-                  </div>
-                  <div className="mt-3 grid gap-
+                      <button onClick={() => toggleStatus(work
