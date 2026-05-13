@@ -129,22 +129,6 @@ export function totalsByAthlete(workouts, athletes) {
   });
 }
 
-export function getCalendarDays(monthValue) {
-  const [year, month] = monthValue.split("-").map(Number);
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = new Date(year, month, 0);
-  const mondayBasedStart = (firstDay.getDay() + 6) % 7;
-  const days = [];
-
-  for (let i = 0; i < mondayBasedStart; i++) days.push({ date: null, dayNumber: "" });
-  for (let day = 1; day <= lastDay.getDate(); day++) {
-    const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    days.push({ date, dayNumber: day });
-  }
-  while (days.length % 7 !== 0) days.push({ date: null, dayNumber: "" });
-  return days;
-}
-
 function getDistance(workout, sport) {
   if (workout.sport === sport) return Number(workout.distance || 0);
   if (workout.sport !== "Brickpass") return 0;
@@ -153,7 +137,6 @@ function getDistance(workout, sport) {
   if (sport === "Löpning") return Number(workout.runDistance || 0);
   return 0;
 }
-
 function findLongest(workouts, sport) {
   const done = workouts.filter(isDone);
   let best = null;
